@@ -2,11 +2,13 @@ use std::{error::Error, fmt::Display};
 
 mod join;
 mod nick;
+mod privmsg;
 mod user;
 
 pub use join::Join;
 pub use join::JoinParams;
 pub use nick::Nick;
+pub use privmsg::PrivMsg;
 pub use user::User;
 
 #[derive(Debug)]
@@ -110,17 +112,19 @@ impl Error for ParseError {}
 
 #[derive(Debug)]
 pub enum Command {
-    Nick(Nick),
-    User(User),
     Join(Join),
+    Nick(Nick),
+    PrivMsg(PrivMsg),
+    User(User),
 }
 
 impl Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Command::Nick(nick) => nick.fmt(f),
-            Command::User(user) => user.fmt(f),
             Command::Join(join) => join.fmt(f),
+            Command::Nick(nick) => nick.fmt(f),
+            Command::PrivMsg(privmsg) => privmsg.fmt(f),
+            Command::User(user) => user.fmt(f),
         }
     }
 }
@@ -133,6 +137,8 @@ impl TryFrom<String> for Command {
         match command {
             "JOIN" => Ok(Command::Join(Join::try_from(parameters.to_string())?)),
             "NICK" => Ok(Command::Nick(Nick::try_from(parameters.to_string())?)),
+            "PRIVMSG" => Ok(Command::PrivMsg(PrivMsg::try_from(parameters)?)),
+            "USER" => Ok(Command::User(User::try_from(parameters.to_string())?)),
             cmd => Err(ParseError::UnknownCommand(cmd.to_string())),
         }
     }

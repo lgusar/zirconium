@@ -1,30 +1,18 @@
+use std::error::Error;
+
 use tokio::net::TcpStream;
 use zirconium::{
     Connection,
-    message::{Join, Message, Nick, User},
+    message::{Command, Join, Message, Nick, PrivMsg, User},
 };
+
+const NICKNAME: &str = "test-user";
 
 #[tokio::main]
 async fn main() {
-    let stream = TcpStream::connect("localhost:6667").await.unwrap();
-    let mut connection = Connection::new(stream);
+    let mut conn_ergo1 = register(NICKNAME.into(), "localhost:6667").await.unwrap();
 
-    connection
-        .write_message(Message::from(Nick {
-            nickname: "oberst".into(),
-        }))
-        .await
-        .unwrap();
-
-    connection
-        .write_message(Message::from(User {
-            username: "oberst".into(),
-            realname: "oberst".into(),
-        }))
-        .await
-        .unwrap();
-
-    connection
+    conn_ergo1
         .write_message(Message::from(Join {
             params: zirconium::message::JoinParams::Channels {
                 channels: vec!["#test".into()],
@@ -34,14 +22,54 @@ async fn main() {
         .await
         .unwrap();
 
+    conn_ergo1
+        .write_message(Message::from(PrivMsg {
+            targets: vec!["#test".into()],
+            payload: "test".into(),
+        }))
+        .await
+        .unwrap();
+
     loop {
-        // let msg = connection
-        //     .stream
-        //     .read_buf(&mut connection.buffer)
-        //     .await
-        //     .unwrap();
-        if let Some(msg) = connection.read_message().await.unwrap() {
-            print!("{}", msg);
+        if let Some(msg) = tokio::select! {
+            msg = conn_ergo1.read_message() => msg.unwrap(),
+            // msg = conn_broski.read_message() => msg.unwrap(),
+        } {
+            match msg.command {
+                Command::PrivMsg(PrivMsg {
+                    targets: _,
+                    payload,
+                }) => {
+                    if let Some(source) = msg.source {
+                        println!("{}: {}", source, payload);
+                    } else {
+                        println!("{}", payload);
+                    }
+                }
+                _ => {
+                    print!("{}", msg);
+                }
+            }
         }
     }
+}
+
+async fn register(nickname: String, addr: &str) -> Result<Connection, Box<dyn Error>> {
+    let stream = TcpStream::connect(addr).await?;
+    let mut connection = Connection::new(stream);
+
+    connection
+        .write_message(Message::from(Nick {
+            nickname: nickname.clone(),
+        }))
+        .await?;
+
+    connection
+        .write_message(Message::from(User {
+            username: nickname.clone(),
+            realname: nickname.clone(),
+        }))
+        .await?;
+
+    Ok(connection)
 }

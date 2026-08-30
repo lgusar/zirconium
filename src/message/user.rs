@@ -1,6 +1,8 @@
-use super::{Command, Message};
+use super::{Command, Message, ParseError};
 
 use std::fmt::Display;
+
+use regex::regex;
 
 #[derive(Debug)]
 pub struct User {
@@ -20,15 +22,35 @@ impl From<User> for Message {
     }
 }
 
-// TODO: implement TryFrom for User for String and &String
-// impl TryFrom<String> for Nick {
-//     type Error = ParseError;
-//
-//     fn try_from(value: String) -> Result<Self, Self::Error> {
-//         if value.contains(" ") || value.is_empty() {
-//             return Err(ParseError::BadFormat);
-//         }
-//
-//         Ok(Nick { nickname: value })
-//     }
-// }
+impl TryFrom<&str> for User {
+    type Error = ParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let re = regex!(r"(\w*) ?0? ?\*? (\w*)");
+        let (_, [username, realname]) = re
+            .captures(value)
+            .map(|caps| caps.extract())
+            .ok_or(ParseError::BadFormat)?;
+
+        Ok(User {
+            username: username.into(),
+            realname: realname.into(),
+        })
+    }
+}
+
+impl TryFrom<&String> for User {
+    type Error = ParseError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        User::try_from(value.as_str())
+    }
+}
+
+impl TryFrom<String> for User {
+    type Error = ParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        User::try_from(value.as_str())
+    }
+}
