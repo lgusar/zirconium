@@ -1,5 +1,7 @@
 use std::error::Error;
 
+use log::info;
+use simple_logger::SimpleLogger;
 use tokio::net::TcpStream;
 use zirconium::{
     Connection,
@@ -10,6 +12,8 @@ const NICKNAME: &str = "test-user";
 
 #[tokio::main]
 async fn main() {
+    SimpleLogger::new().env().init().unwrap();
+
     let mut conn_ergo1 = register(NICKNAME.into(), "localhost:6667").await.unwrap();
 
     conn_ergo1
@@ -41,7 +45,7 @@ async fn main() {
                     payload,
                 }) => {
                     if let Some(source) = msg.source {
-                        println!("{}: {}", source, payload);
+                        println!("{}: {}", source.name, payload);
                     } else {
                         println!("{}", payload);
                     }
@@ -55,6 +59,8 @@ async fn main() {
 }
 
 async fn register(nickname: String, addr: &str) -> Result<Connection, Box<dyn Error>> {
+    info!("Registering to {} with nickname {}", addr, nickname);
+
     let stream = TcpStream::connect(addr).await?;
     let mut connection = Connection::new(stream);
 
