@@ -5,7 +5,7 @@ use tokio::net::TcpStream;
 
 use crate::{
     Connection,
-    message::{Message, Nick, Source, User},
+    message::{Command, Message, Nick, Numeric, Source, User},
 };
 
 #[derive(Debug)]
@@ -35,7 +35,7 @@ pub struct App {
 
 #[derive(Debug)]
 pub enum AppError {
-    RegisterError(String),
+    RegisterError(Numeric),
 }
 
 impl Display for AppError {
@@ -76,6 +76,102 @@ impl App {
             .await?;
 
         // TODO: registration process
+
+        loop {
+            match connection.read_message().await? {
+                Some(message) => match message.command {
+                    Command::Numeric(Numeric::RplWelcome { message }) => {
+                        println!("{}", message);
+                        break;
+                    }
+                    _ => {
+                        return Err(Box::new(AppError::RegisterError(Numeric::RplWelcome {
+                            message: "".into(), // WARN: this feels hacky, maybe use a different
+                                                // enum
+                        })));
+                    }
+                },
+                None => continue,
+            }
+        }
+
+        loop {
+            match connection.read_message().await? {
+                Some(message) => match message.command {
+                    Command::Numeric(Numeric::RplYourHost { message }) => {
+                        println!("{}", message);
+                        break;
+                    }
+                    _ => {
+                        return Err(Box::new(AppError::RegisterError(Numeric::RplYourHost {
+                            message: "".into(), // WARN: this feels hacky, maybe use a different
+                                                // enum
+                        })));
+                    }
+                },
+                None => continue,
+            }
+        }
+
+        loop {
+            match connection.read_message().await? {
+                Some(message) => match message.command {
+                    Command::Numeric(Numeric::RplCreated { message }) => {
+                        println!("{}", message);
+                        break;
+                    }
+                    _ => {
+                        return Err(Box::new(AppError::RegisterError(Numeric::RplCreated {
+                            message: "".into(), // WARN: this feels hacky, maybe use a different
+                                                // enum
+                        })));
+                    }
+                },
+                None => continue,
+            }
+        }
+
+        loop {
+            match connection.read_message().await? {
+                Some(message) => match message.command {
+                    Command::Numeric(Numeric::RplMyInfo { message }) => {
+                        println!("{}", message);
+                        break;
+                    }
+                    _ => {
+                        return Err(Box::new(AppError::RegisterError(Numeric::RplMyInfo {
+                            message: "".into(), // WARN: this feels hacky, maybe use a different
+                                                // enum
+                        })));
+                    }
+                },
+                None => continue,
+            }
+        }
+
+        loop {
+            match connection.read_message().await? {
+                Some(message) => match message.command {
+                    Command::Numeric(numeric) => {
+                        println!("{}", numeric);
+                        match numeric {
+                            Numeric::RplUModeIs {
+                                client: _,
+                                user_modes: _,
+                            } => break,
+                            _ => continue,
+                        }
+                    }
+                    _ => {
+                        return Err(Box::new(AppError::RegisterError(Numeric::RplMyInfo {
+                            message: "".into(), // WARN: this feels hacky, maybe use a different
+                                                // enum
+                        })));
+                    }
+                },
+                None => continue,
+            }
+        }
 
         let server = Server {
             name: "".into(),

@@ -25,7 +25,7 @@ impl TryFrom<String> for Nick {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if value.contains(" ") || value.is_empty() {
-            return Err(ParseError::BadFormat);
+            return Err(ParseError::BadCommand(value));
         }
 
         Ok(Nick { nickname: value })

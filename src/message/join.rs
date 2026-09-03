@@ -48,13 +48,15 @@ impl TryFrom<&String> for Join {
             })
         } else {
             if value.contains(" ") {
-                let (channels, keys) = value.split_once(" ").ok_or(ParseError::BadFormat)?;
+                let (channels, keys) = value
+                    .split_once(" ")
+                    .ok_or(ParseError::BadCommand(value.into()))?;
                 let channels: Vec<String> = channels.split(",").map(|c| c.to_string()).collect();
                 let keys: Vec<String> = keys.split(",").map(|c| c.to_string()).collect();
 
                 if channels.len() != keys.len() {
                     // TODO: change error message
-                    return Err(ParseError::BadFormat);
+                    return Err(ParseError::BadCommand(value.into()));
                 }
 
                 Ok(Join {

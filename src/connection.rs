@@ -60,14 +60,14 @@ impl Connection {
                         trace!("parsed message: {}", msg);
                         return Ok(Some(msg));
                     }
-                    Err(_) => {
-                        error!("could not parse message: {}", msg.trim());
-                        // return Err(Box::new(e));
-                        return Ok(None);
+                    Err(e) => {
+                        error!("could not parse message: {}", e);
+                        return Err(Box::new(e));
                     }
                 }
             }
 
+            // TODO: this should somehow use await/be a future?
             if 0 == self.stream.read_buf(&mut self.buffer).await? {
                 if self.buffer.is_empty() {
                     return Ok(None);

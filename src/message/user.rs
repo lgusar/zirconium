@@ -30,7 +30,7 @@ impl TryFrom<&str> for User {
         let (_, [username, realname]) = re
             .captures(value)
             .map(|caps| caps.extract())
-            .ok_or(ParseError::BadFormat)?;
+            .ok_or(ParseError::BadCommand(value.into()))?;
 
         Ok(User {
             username: username.into(),

@@ -2,13 +2,18 @@ use std::{error::Error, fmt::Display};
 
 mod join;
 mod nick;
+mod numeric;
 mod privmsg;
 mod user;
 
 pub use join::Join;
 pub use join::JoinParams;
+use log::debug;
+use log::trace;
 pub use nick::Nick;
+pub use numeric::Numeric;
 pub use privmsg::PrivMsg;
+use regex::regex;
 pub use user::User;
 
 #[derive(Debug)]
@@ -31,7 +36,9 @@ impl TryFrom<String> for Tag {
     type Error = ParseError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let (key, value) = value.split_once("=").ok_or(ParseError::BadFormat)?;
+        let (key, value) = value
+            .split_once("=")
+            .ok_or(ParseError::BadTags(value.clone()))?;
         if value.is_empty() {
             Ok(Tag {
                 key: key.to_string(),
@@ -67,23 +74,24 @@ impl Display for Source {
     }
 }
 
-impl TryFrom<String> for Source {
+impl TryFrom<&str> for Source {
     type Error = ParseError;
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let (rest, host) = value.split_once("@").ok_or(ParseError::BadFormat)?;
-        let host = if host.is_empty() {
-            None
-        } else {
-            Some(host.to_string())
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let re = regex!(
+            r"(?U)^(?<nick>[^\x{0}\r\n\ ]*)(!(?<user>[^\x{0}\r\n\ !]*))?(@(?<host>[^\x{0}\r\n\ @!]*))?$"
+        );
+
+        let Some(caps) = re.captures(value) else {
+            return Err(ParseError::BadSource(value.into()));
         };
 
-        let (name, user) = rest.split_once("!").ok_or(ParseError::BadFormat)?;
-        let user = if user.is_empty() {
-            None
-        } else {
-            Some(user.to_string())
-        };
+        let name = caps
+            .name("nick")
+            .map(|m| m.as_str().to_string())
+            .ok_or(ParseError::BadSource(value.into()))?;
+        let user = caps.name("user").map(|m| m.as_str().to_string());
+        let host = caps.name("host").map(|m| m.as_str().to_string());
 
         Ok(Source {
             name: name.to_string(),
@@ -93,16 +101,36 @@ impl TryFrom<String> for Source {
     }
 }
 
+impl TryFrom<&String> for Source {
+    type Error = ParseError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        Source::try_from(value.as_str())
+    }
+}
+
+impl TryFrom<String> for Source {
+    type Error = ParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Source::try_from(value.as_str())
+    }
+}
+
 #[derive(Debug)]
 pub enum ParseError {
-    BadFormat,
+    BadTags(String),
+    BadSource(String),
+    BadCommand(String),
     UnknownCommand(String),
 }
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::BadFormat => write!(f, "Bad format"),
+            Self::BadTags(tags) => write!(f, "Bad tags: {}", tags),
+            Self::BadSource(source) => write!(f, "Bad source: {}", source),
+            Self::BadCommand(cmd) => write!(f, "Bad command: {}", cmd),
             Self::UnknownCommand(cmd) => write!(f, "Unknown command: {}", cmd),
         }
     }
@@ -116,6 +144,7 @@ pub enum Command {
     Nick(Nick),
     PrivMsg(PrivMsg),
     User(User),
+    Numeric(Numeric),
 }
 
 impl Display for Command {
@@ -125,7 +154,34 @@ impl Display for Command {
             Command::Nick(nick) => nick.fmt(f),
             Command::PrivMsg(privmsg) => privmsg.fmt(f),
             Command::User(user) => user.fmt(f),
+            Command::Numeric(num) => num.fmt(f),
         }
+    }
+}
+
+impl TryFrom<&str> for Command {
+    type Error = ParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        debug!("try_from: {}", value);
+        let (command, parameters) = value
+            .split_once(" ")
+            .ok_or(ParseError::BadCommand(value.into()))?;
+        match command {
+            "JOIN" => Ok(Command::Join(Join::try_from(parameters.to_string())?)),
+            "NICK" => Ok(Command::Nick(Nick::try_from(parameters.to_string())?)),
+            "PRIVMSG" => Ok(Command::PrivMsg(PrivMsg::try_from(parameters)?)),
+            "USER" => Ok(Command::User(User::try_from(parameters.to_string())?)),
+            _ => Ok(Command::Numeric(Numeric::try_from(value)?)),
+        }
+    }
+}
+
+impl TryFrom<&String> for Command {
+    type Error = ParseError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        Command::try_from(value.as_str())
     }
 }
 
@@ -133,14 +189,7 @@ impl TryFrom<String> for Command {
     type Error = ParseError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let (command, parameters) = value.split_once(" ").ok_or(ParseError::BadFormat)?;
-        match command {
-            "JOIN" => Ok(Command::Join(Join::try_from(parameters.to_string())?)),
-            "NICK" => Ok(Command::Nick(Nick::try_from(parameters.to_string())?)),
-            "PRIVMSG" => Ok(Command::PrivMsg(PrivMsg::try_from(parameters)?)),
-            "USER" => Ok(Command::User(User::try_from(parameters.to_string())?)),
-            cmd => Err(ParseError::UnknownCommand(cmd.to_string())),
-        }
+        Command::try_from(value.as_str())
     }
 }
 
@@ -201,26 +250,35 @@ impl TryFrom<String> for Message {
     type Error = ParseError;
 
     fn try_from(mut value: String) -> Result<Self, Self::Error> {
+        trace!("Message::try_from {}", value);
         value = value.trim().to_string();
 
         let (tags, value) = if value.starts_with("@") {
             if let Some((tags, rest)) = value.split_once(" ") {
-                let tags = tags.strip_prefix("@").ok_or(ParseError::BadFormat)?;
+                let tags = tags
+                    .strip_prefix("@")
+                    .ok_or(ParseError::BadTags(tags.into()))?;
                 (Some(tags.to_string()), rest.to_string())
             } else {
-                return Err(ParseError::BadFormat);
+                return Err(ParseError::BadTags(value.clone()));
             }
         } else {
             (None, value)
         };
+        trace!("Message::try_from after tags");
 
         let (source, value): (Option<Source>, String) = if value.starts_with(":") {
-            let (source, rest) = value.split_once(" ").ok_or(ParseError::BadFormat)?;
-            let source = source.strip_prefix(":").ok_or(ParseError::BadFormat)?;
-            (Some(source.to_string().try_into()?), rest.to_string())
+            let (source, rest) = value
+                .split_once(" ")
+                .ok_or(ParseError::BadSource(value.clone()))?;
+            let source = source
+                .strip_prefix(":")
+                .ok_or(ParseError::BadSource(source.into()))?;
+            (Some(source.try_into()?), rest.to_string())
         } else {
             (None, value)
         };
+        trace!("Message::try_from after source");
 
         let tags: Vec<Tag> = {
             if let Some(tags) = tags {
@@ -239,5 +297,58 @@ impl TryFrom<String> for Message {
         }
 
         Ok(msg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_source_try_from_string() -> Result<(), Box<dyn Error>> {
+        let input = "nick!user@host.com";
+        let source = Source::try_from(input)?;
+
+        assert_eq!(source.name, "nick");
+        assert_eq!(source.user, Some("user".into()));
+        assert_eq!(source.host, Some("host.com".into()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_source_try_from_string_with_special_characters() -> Result<(), Box<dyn Error>> {
+        let input = "n!ck!us@r@host.com";
+        let source = Source::try_from(input)?;
+
+        assert_eq!(source.name, "n!ck");
+        assert_eq!(source.user, Some("us@r".into()));
+        assert_eq!(source.host, Some("host.com".into()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_source_try_from_string_without_user() -> Result<(), Box<dyn Error>> {
+        let input = "nick@host.com";
+        let source = Source::try_from(input)?;
+
+        assert_eq!(source.name, "nick");
+        assert_eq!(source.user, None);
+        assert_eq!(source.host, Some("host.com".into()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_source_try_from_string_only_name() -> Result<(), Box<dyn Error>> {
+        let input = "server";
+        let source = Source::try_from(input)?;
+
+        assert_eq!(source.name, "server");
+        assert_eq!(source.user, None);
+        assert_eq!(source.host, None);
+
+        Ok(())
     }
 }
