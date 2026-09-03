@@ -48,15 +48,19 @@ impl TryFrom<&String> for Join {
             })
         } else {
             if value.contains(" ") {
-                let (channels, keys) = value
-                    .split_once(" ")
-                    .ok_or(ParseError::BadCommand(value.into()))?;
+                let (channels, keys) = value.split_once(" ").ok_or(ParseError::BadCommand(
+                    "expected values and keys".into(),
+                    value.into(),
+                ))?;
                 let channels: Vec<String> = channels.split(",").map(|c| c.to_string()).collect();
                 let keys: Vec<String> = keys.split(",").map(|c| c.to_string()).collect();
 
                 if channels.len() != keys.len() {
                     // TODO: change error message
-                    return Err(ParseError::BadCommand(value.into()));
+                    return Err(ParseError::BadCommand(
+                        "number of channels and keys not equal".into(),
+                        value.into(),
+                    ));
                 }
 
                 Ok(Join {

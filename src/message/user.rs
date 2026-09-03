@@ -27,10 +27,13 @@ impl TryFrom<&str> for User {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let re = regex!(r"(\w*) ?0? ?\*? (\w*)");
-        let (_, [username, realname]) = re
-            .captures(value)
-            .map(|caps| caps.extract())
-            .ok_or(ParseError::BadCommand(value.into()))?;
+        let (_, [username, realname]) =
+            re.captures(value)
+                .map(|caps| caps.extract())
+                .ok_or(ParseError::BadCommand(
+                    "expected username and realname".into(),
+                    value.into(),
+                ))?;
 
         Ok(User {
             username: username.into(),

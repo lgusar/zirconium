@@ -163,9 +163,9 @@ impl App {
                         }
                     }
                     _ => {
-                        return Err(Box::new(AppError::RegisterError(Numeric::RplMyInfo {
-                            message: "".into(), // WARN: this feels hacky, maybe use a different
-                                                // enum
+                        return Err(Box::new(AppError::RegisterError(Numeric::RplUModeIs {
+                            client: "".into(),
+                            user_modes: "".into(),
                         })));
                     }
                 },

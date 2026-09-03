@@ -9,7 +9,6 @@ mod user;
 pub use join::Join;
 pub use join::JoinParams;
 use log::debug;
-use log::trace;
 pub use nick::Nick;
 pub use numeric::Numeric;
 pub use privmsg::PrivMsg;
@@ -121,7 +120,7 @@ impl TryFrom<String> for Source {
 pub enum ParseError {
     BadTags(String),
     BadSource(String),
-    BadCommand(String),
+    BadCommand(String, String),
     UnknownCommand(String),
 }
 
@@ -130,7 +129,7 @@ impl Display for ParseError {
         match self {
             Self::BadTags(tags) => write!(f, "Bad tags: {}", tags),
             Self::BadSource(source) => write!(f, "Bad source: {}", source),
-            Self::BadCommand(cmd) => write!(f, "Bad command: {}", cmd),
+            Self::BadCommand(message, cmd) => write!(f, "Bad command: {}\n{}", cmd, message),
             Self::UnknownCommand(cmd) => write!(f, "Unknown command: {}", cmd),
         }
     }
@@ -164,9 +163,10 @@ impl TryFrom<&str> for Command {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         debug!("try_from: {}", value);
-        let (command, parameters) = value
-            .split_once(" ")
-            .ok_or(ParseError::BadCommand(value.into()))?;
+        let (command, parameters) = value.split_once(" ").ok_or(ParseError::BadCommand(
+            "expected command and parameters".into(),
+            value.into(),
+        ))?;
         match command {
             "JOIN" => Ok(Command::Join(Join::try_from(parameters.to_string())?)),
             "NICK" => Ok(Command::Nick(Nick::try_from(parameters.to_string())?)),
@@ -250,7 +250,6 @@ impl TryFrom<String> for Message {
     type Error = ParseError;
 
     fn try_from(mut value: String) -> Result<Self, Self::Error> {
-        trace!("Message::try_from {}", value);
         value = value.trim().to_string();
 
         let (tags, value) = if value.starts_with("@") {
@@ -265,7 +264,6 @@ impl TryFrom<String> for Message {
         } else {
             (None, value)
         };
-        trace!("Message::try_from after tags");
 
         let (source, value): (Option<Source>, String) = if value.starts_with(":") {
             let (source, rest) = value
@@ -278,7 +276,6 @@ impl TryFrom<String> for Message {
         } else {
             (None, value)
         };
-        trace!("Message::try_from after source");
 
         let tags: Vec<Tag> = {
             if let Some(tags) = tags {

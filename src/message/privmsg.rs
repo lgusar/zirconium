@@ -26,9 +26,10 @@ impl TryFrom<&str> for PrivMsg {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if let Some((targets, mut payload)) = value.split_once(" ") {
             if payload.starts_with(":") {
-                payload = payload
-                    .strip_prefix(":")
-                    .ok_or(ParseError::BadCommand(value.into()))?;
+                payload = payload.strip_prefix(":").ok_or(ParseError::BadCommand(
+                    "expected to have ':' at the start of the payload".into(),
+                    value.into(),
+                ))?;
             }
 
             let targets: Vec<String> = targets.split(",").map(|t| t.to_string()).collect();
@@ -39,7 +40,10 @@ impl TryFrom<&str> for PrivMsg {
             })
         } else {
             if value.is_empty() {
-                Err(ParseError::BadCommand(value.into()))
+                Err(ParseError::BadCommand(
+                    "received empty payload".into(),
+                    value.into(),
+                ))
             } else {
                 let targets: Vec<String> = value.split(",").map(|t| t.to_string()).collect();
                 Ok(PrivMsg {

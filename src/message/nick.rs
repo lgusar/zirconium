@@ -25,7 +25,10 @@ impl TryFrom<String> for Nick {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if value.contains(" ") || value.is_empty() {
-            return Err(ParseError::BadCommand(value));
+            return Err(ParseError::BadCommand(
+                "string should not contain a space".into(),
+                value,
+            ));
         }
 
         Ok(Nick { nickname: value })

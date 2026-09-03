@@ -1,7 +1,7 @@
 use std::{error::Error, io::Cursor};
 
 use bytes::{Buf, Bytes, BytesMut};
-use log::{error, trace};
+use log::{debug, error};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
     net::TcpStream,
@@ -54,10 +54,10 @@ impl Connection {
     pub async fn read_message(&mut self) -> Result<Option<Message>, Box<dyn Error>> {
         loop {
             if let Some(msg) = self.parse_message()? {
-                trace!("received: {}", msg.trim());
+                debug!("received: {}", msg.trim());
                 match Message::try_from(msg.clone()) {
                     Ok(msg) => {
-                        trace!("parsed message: {}", msg);
+                        debug!("parsed message: {}", msg.to_string().trim());
                         return Ok(Some(msg));
                     }
                     Err(e) => {
